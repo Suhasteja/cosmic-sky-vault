@@ -1,378 +1,302 @@
+// Main dashboard page for managing SkyCloud records
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { toast } from 'sonner';
+import { RecordForm } from '../components/dashboard/RecordForm';
+import { RecordList } from '../components/dashboard/RecordList';
+import { 
+  Cloud, 
+  Plus, 
+  Search, 
+  Filter, 
+  LogOut, 
+  User,
+  Loader2,
+  RefreshCw
+} from 'lucide-react';
+import { SkyCloudRecord, SkyCloudFormData } from '../types';
+import { 
+  addRecord, 
+  getUserRecords, 
+  updateRecord, 
+  deleteRecord 
+} from '../services/firestore';
 
-import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { Button } from "@/components/ui/button";
-import { FileItem, FileItemType } from "@/components/FileItem";
-import { FileBreadcrumb, BreadcrumbItem } from "@/components/FileBreadcrumb";
-import { CreateFolderDialog } from "@/components/CreateFolderDialog";
-import { RenameDialog } from "@/components/RenameDialog";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { FileUploadDialog } from "@/components/FileUploadDialog";
-import { Folder, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
-
-// Sample data to simulate a file system
-const generateId = () => Math.random().toString(36).substring(2, 9);
-
-const initialFiles: Record<string, FileItemType[]> = {
-  root: [
-    {
-      id: "folder1",
-      name: "Documents",
-      type: "folder",
-      modifiedAt: new Date(2023, 5, 15),
-    },
-    {
-      id: "folder2",
-      name: "Images",
-      type: "folder",
-      modifiedAt: new Date(2023, 6, 2),
-    },
-    {
-      id: "file1",
-      name: "Project Report.pdf",
-      type: "file",
-      size: "2.4 MB",
-      modifiedAt: new Date(2023, 7, 10),
-    },
-    {
-      id: "file2",
-      name: "Presentation.pptx",
-      type: "file",
-      size: "4.2 MB",
-      modifiedAt: new Date(2023, 7, 12),
-    },
-  ],
-  folder1: [
-    {
-      id: "folder3",
-      name: "Work",
-      type: "folder",
-      modifiedAt: new Date(2023, 6, 12),
-    },
-    {
-      id: "file3",
-      name: "Resume.doc",
-      type: "file",
-      size: "1.2 MB",
-      modifiedAt: new Date(2023, 7, 5),
-    },
-  ],
-  folder2: [
-    {
-      id: "file4",
-      name: "Vacation.jpg",
-      type: "file",
-      size: "3.1 MB",
-      modifiedAt: new Date(2023, 6, 20),
-    },
-    {
-      id: "file5",
-      name: "Profile.png",
-      type: "file",
-      size: "2.8 MB",
-      modifiedAt: new Date(2023, 7, 8),
-    },
-  ],
-  folder3: [],
-};
-
-const folderPaths: Record<string, { name: string; parentId: string }> = {
-  folder1: { name: "Documents", parentId: "root" },
-  folder2: { name: "Images", parentId: "root" },
-  folder3: { name: "Work", parentId: "folder1" },
-};
-
-const Dashboard = () => {
-  const { folderId } = useParams();
-  const { toast } = useToast();
-  const currentFolder = folderId || "root";
+export const Dashboard: React.FC = () => {
+  const { currentUser, logout } = useAuth();
+  const [records, setRecords] = useState<SkyCloudRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<SkyCloudRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   
-  const [files, setFiles] = useState<Record<string, FileItemType[]>>(initialFiles);
-  const [currentItems, setCurrentItems] = useState<FileItemType[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([]);
+  // Form state
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<SkyCloudRecord | undefined>();
   
-  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
-  const [isUploadFileOpen, setIsUploadFileOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<FileItemType | null>(null);
+  // Filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
 
-  // Update current items when folder changes or search query changes
+  // Load records on component mount
   useEffect(() => {
-    const items = files[currentFolder] || [];
-    if (searchQuery) {
-      const filteredItems = items.filter(item => 
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    if (currentUser) {
+      loadRecords();
+    }
+  }, [currentUser]);
+
+  // Apply filters when records or filter criteria change
+  useEffect(() => {
+    applyFilters();
+  }, [records, searchTerm, statusFilter, priorityFilter]);
+
+  // Function to load all user records
+  const loadRecords = async () => {
+    if (!currentUser) return;
+
+    try {
+      setLoading(true);
+      const userRecords = await getUserRecords(currentUser.uid);
+      setRecords(userRecords);
+    } catch (error) {
+      console.error('Error loading records:', error);
+      toast.error('Failed to load records. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to refresh records
+  const refreshRecords = async () => {
+    if (!currentUser) return;
+
+    try {
+      setRefreshing(true);
+      const userRecords = await getUserRecords(currentUser.uid);
+      setRecords(userRecords);
+      toast.success('Records refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing records:', error);
+      toast.error('Failed to refresh records');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Function to apply search and status filters
+  const applyFilters = () => {
+    let filtered = records;
+
+    // Apply search filter
+    if (searchTerm) {
+      const lowercaseSearch = searchTerm.toLowerCase();
+      filtered = filtered.filter(record =>
+        record.title.toLowerCase().includes(lowercaseSearch) ||
+        record.description.toLowerCase().includes(lowercaseSearch) ||
+        record.category.toLowerCase().includes(lowercaseSearch)
       );
-      setCurrentItems(filteredItems);
-    } else {
-      setCurrentItems(items);
-    }
-  }, [currentFolder, files, searchQuery]);
-
-  // Update breadcrumbs when folder changes
-  useEffect(() => {
-    if (currentFolder === "root") {
-      setBreadcrumbs([]);
-      return;
     }
 
-    const getBreadcrumbs = (folderId: string): BreadcrumbItem[] => {
-      const folder = folderPaths[folderId];
-      if (!folder) return [];
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(record => record.status === statusFilter);
+    }
 
-      const result: BreadcrumbItem[] = [{
-        id: folderId,
-        name: folder.name,
-        path: folderId
-      }];
+    // Apply priority filter
+    if (priorityFilter !== 'all') {
+      filtered = filtered.filter(record => record.priority === priorityFilter);
+    }
 
-      if (folder.parentId !== "root") {
-        return [...getBreadcrumbs(folder.parentId), ...result];
-      }
+    setFilteredRecords(filtered);
+  };
 
-      return result;
-    };
+  // Function to handle adding new record
+  const handleAddRecord = async (data: SkyCloudFormData) => {
+    if (!currentUser) return;
 
-    const newBreadcrumbs = getBreadcrumbs(currentFolder);
-    setBreadcrumbs(newBreadcrumbs);
-  }, [currentFolder]);
-
-  // Handler for opening files and folders
-  const handleOpen = (item: FileItemType) => {
-    if (item.type === "folder") {
-      // Navigate to folder - handled by React Router
-      window.location.href = `/dashboard/${item.id}`;
-    } else {
-      // For files, we'd show a preview or download in a real app
-      toast({
-        title: "File Preview",
-        description: `Opening ${item.name}`,
-      });
+    try {
+      await addRecord(data, currentUser.uid);
+      await loadRecords();
+      toast.success('Record added successfully!');
+    } catch (error) {
+      console.error('Error adding record:', error);
+      throw new Error('Failed to add record');
     }
   };
 
-  // Handler for creating new folders
-  const handleCreateFolder = (name: string) => {
-    const newFolder: FileItemType = {
-      id: generateId(),
-      name,
-      type: "folder",
-      modifiedAt: new Date(),
-    };
-    
-    // Update files state
-    setFiles(prev => ({
-      ...prev,
-      [currentFolder]: [...(prev[currentFolder] || []), newFolder],
-      [newFolder.id]: [], // Create empty array for the new folder's contents
-    }));
-    
-    // Update folder paths
-    folderPaths[newFolder.id] = { name, parentId: currentFolder };
-    
-    toast({
-      title: "Folder Created",
-      description: `Folder "${name}" has been created.`,
-    });
-  };
+  // Function to handle updating existing record
+  const handleUpdateRecord = async (data: SkyCloudFormData) => {
+    if (!editingRecord?.id) return;
 
-  // Handler for file uploads
-  const handleFileUpload = (file: File) => {
-    const newFile: FileItemType = {
-      id: generateId(),
-      name: file.name,
-      type: "file",
-      size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-      modifiedAt: new Date(),
-    };
-    
-    setFiles(prev => ({
-      ...prev,
-      [currentFolder]: [...(prev[currentFolder] || []), newFile],
-    }));
-  };
-
-  // Handler for deleting items
-  const handleDelete = (item: FileItemType) => {
-    if (item.type === "folder") {
-      // Remove folder from files state
-      const newFiles = { ...files };
-      delete newFiles[item.id];
-      
-      // Remove folder from parent folder
-      newFiles[currentFolder] = newFiles[currentFolder].filter(f => f.id !== item.id);
-      
-      // Remove folder from folderPaths
-      delete folderPaths[item.id];
-      
-      setFiles(newFiles);
-    } else {
-      // Remove file from current folder
-      setFiles(prev => ({
-        ...prev,
-        [currentFolder]: prev[currentFolder].filter(f => f.id !== item.id),
-      }));
+    try {
+      await updateRecord(editingRecord.id, data);
+      await loadRecords();
+      setEditingRecord(undefined);
+      toast.success('Record updated successfully!');
+    } catch (error) {
+      console.error('Error updating record:', error);
+      throw new Error('Failed to update record');
     }
-    
-    toast({
-      title: "Item Deleted",
-      description: `"${item.name}" has been deleted.`,
-    });
   };
 
-  // Handler for renaming items
-  const handleRename = (item: FileItemType, newName: string) => {
-    const updatedItem = { ...item, name: newName };
-    
-    // Update item in files
-    setFiles(prev => ({
-      ...prev,
-      [currentFolder]: prev[currentFolder].map(f => 
-        f.id === item.id ? updatedItem : f
-      ),
-    }));
-    
-    // If it's a folder, update folderPaths
-    if (item.type === "folder") {
-      folderPaths[item.id] = { 
-        ...folderPaths[item.id],
-        name: newName
-      };
+  // Function to handle deleting record
+  const handleDeleteRecord = async (recordId: string) => {
+    try {
+      await deleteRecord(recordId);
+      await loadRecords();
+      toast.success('Record deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting record:', error);
+      toast.error('Failed to delete record');
     }
-    
-    toast({
-      title: "Item Renamed",
-      description: `Item has been renamed to "${newName}".`,
-    });
+  };
+
+  // Function to open edit form
+  const handleEditRecord = (record: SkyCloudRecord) => {
+    setEditingRecord(record);
+    setIsFormOpen(true);
+  };
+
+  // Function to open add form
+  const handleAddClick = () => {
+    setEditingRecord(undefined);
+    setIsFormOpen(true);
+  };
+
+  // Function to close form
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setEditingRecord(undefined);
+  };
+
+  // Function to handle logout
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast.error('Failed to log out');
+    }
   };
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <AppSidebar onUploadClick={() => setIsUploadFileOpen(true)} />
-        
-        <div className="flex-1 flex flex-col">
-          <div className="border-b">
-            <div className="px-4 py-2 flex items-center justify-between">
-              <div className="relative w-full max-w-md">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-                <Input
-                  type="search"
-                  placeholder="Search files and folders..."
-                  className="w-full pl-9"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <Cloud className="h-6 w-6 text-white" />
               </div>
-              <div className="flex items-center ml-4 space-x-2">
-                <Button 
-                  variant="outline" 
-                  className="flex items-center"
-                  onClick={() => setIsCreateFolderOpen(true)}
-                >
-                  <Folder className="h-4 w-4 mr-2" />
-                  New Folder
-                </Button>
-                <Button 
-                  className="bg-sky-600 hover:bg-sky-700"
-                  onClick={() => setIsUploadFileOpen(true)}
-                >
-                  Upload
-                </Button>
-              </div>
+              <h1 className="ml-3 text-xl font-semibold text-gray-900">
+                SkyCloud Dashboard
+              </h1>
             </div>
-            <FileBreadcrumb items={breadcrumbs} />
+            
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center text-sm text-gray-600">
+                <User className="h-4 w-4 mr-1" />
+                {currentUser?.displayName || currentUser?.email}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={refreshRecords}
+                disabled={refreshing}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-1" />
+                Logout
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Controls Section */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">My Records</h2>
+              <p className="text-gray-600">
+                Manage your SkyCloud data records
+              </p>
+            </div>
+            <Button onClick={handleAddClick}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Record
+            </Button>
           </div>
 
-          <main className="flex-1 p-6">
-            {currentItems.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {currentItems.map((item) => (
-                  <FileItem
-                    key={item.id}
-                    item={item}
-                    onOpen={handleOpen}
-                    onDelete={(item) => {
-                      setSelectedItem(item);
-                      setIsDeleteDialogOpen(true);
-                    }}
-                    onRename={(item) => {
-                      setSelectedItem(item);
-                      setIsRenameDialogOpen(true);
-                    }}
-                  />
-                ))}
+          {/* Search and Filters */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search records..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="bg-sky-50 p-6 rounded-full">
-                  <Folder className="h-12 w-12 text-sky-600" />
-                </div>
-                <h3 className="text-xl font-semibold mt-4">This folder is empty</h3>
-                <p className="text-gray-500 mt-2 max-w-md">
-                  {searchQuery ? "No items match your search" : "Upload files or create folders to get started"}
-                </p>
-                <div className="flex mt-6">
-                  <Button 
-                    variant="outline" 
-                    className="mr-2"
-                    onClick={() => setIsCreateFolderOpen(true)}
-                  >
-                    <Folder className="h-4 w-4 mr-2" />
-                    New Folder
-                  </Button>
-                  <Button 
-                    className="bg-sky-600 hover:bg-sky-700"
-                    onClick={() => setIsUploadFileOpen(true)}
-                  >
-                    Upload File
-                  </Button>
-                </div>
-              </div>
-            )}
-          </main>
+            </div>
+            
+            <div className="flex gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="Active">Active</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priority</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <CreateFolderDialog
-        open={isCreateFolderOpen}
-        onClose={() => setIsCreateFolderOpen(false)}
-        onCreateFolder={handleCreateFolder}
-      />
-      
-      <FileUploadDialog
-        open={isUploadFileOpen}
-        onClose={() => setIsUploadFileOpen(false)}
-        onFileUpload={handleFileUpload}
-      />
-      
-      <DeleteConfirmDialog
-        open={isDeleteDialogOpen}
-        item={selectedItem}
-        onClose={() => {
-          setIsDeleteDialogOpen(false);
-          setSelectedItem(null);
-        }}
-        onConfirm={handleDelete}
-      />
-      
-      <RenameDialog
-        open={isRenameDialogOpen}
-        item={selectedItem}
-        onClose={() => {
-          setIsRenameDialogOpen(false);
-          setSelectedItem(null);
-        }}
-        onRename={handleRename}
-      />
-    </SidebarProvider>
+        {/* Records List */}
+        <RecordList
+          records={filteredRecords}
+          onEdit={handleEditRecord}
+          onDelete={handleDeleteRecord}
+          loading={loading}
+        />
+
+        {/* Record Form Modal */}
+        <RecordForm
+          isOpen={isFormOpen}
+          onClose={handleCloseForm}
+          onSubmit={editingRecord ? handleUpdateRecord : handleAddRecord}
+          record={editingRecord}
+          isEditing={!!editingRecord}
+        />
+      </main>
+    </div>
   );
 };
-
-export default Dashboard;
