@@ -1,17 +1,20 @@
-# SkyCloud 🌤️
+# FlavorHub 🍽️
 
-A modern, full-stack cloud-based data management platform with user authentication and CRUD operations.
+A modern, full-stack recipe sharing platform where food lovers can discover, create, share, and interact with amazing recipes from around the world.
 
 ## ✨ Features
 
 - **🔐 User Authentication**: Secure registration and login with Firebase Auth
-- **☁️ Cloud Database**: Real-time data storage with Firebase Firestore
-- **📊 CRUD Operations**: Create, Read, Update, Delete records with validation
-- **🔍 Search & Filter**: Advanced search and filtering capabilities
-- **📱 Mobile Responsive**: Responsive design for all screen sizes
+- **📸 Image Upload**: Upload and store recipe images with Firebase Storage
+- **🍳 Recipe Management**: Create, view, edit, and delete recipes with detailed information
+- **❤️ Social Features**: Like, comment, and share recipes
+- **🔍 Advanced Search**: Search by ingredients, cuisine, difficulty, and more
+- **🏷️ Smart Filtering**: Filter by cuisine, difficulty, calories, and tags
+- **📊 Nutrition Tracking**: Display detailed nutrition information
+- **👤 User Profiles**: Personal profile pages with user statistics
+- **📱 Mobile Responsive**: Beautiful responsive design for all devices
 - **🎨 Modern UI**: Built with React, TypeScript, Tailwind CSS, and shadcn/ui
 - **⚡ Real-time Updates**: Live data synchronization
-- **🛡️ Secure**: Row-level security with Firebase authentication
 
 ## 🚀 Tech Stack
 
@@ -20,12 +23,15 @@ A modern, full-stack cloud-based data management platform with user authenticati
 - **Tailwind CSS** for styling
 - **shadcn/ui** component library
 - **React Router** for navigation
+- **React Hook Form** with Zod validation
 - **Lucide React** for icons
 - **Sonner** for toast notifications
+- **date-fns** for date formatting
 
 ### Backend
 - **Firebase Authentication** for secure user management
 - **Firebase Firestore** for cloud database
+- **Firebase Storage** for image uploads
 - **Real-time data synchronization**
 
 ## 🏗️ Project Structure
@@ -34,19 +40,26 @@ A modern, full-stack cloud-based data management platform with user authenticati
 src/
 ├── components/
 │   ├── auth/                 # Authentication components
-│   ├── dashboard/            # Dashboard components
+│   ├── recipes/              # Recipe-related components
+│   │   ├── RecipeCard.tsx    # Recipe card display
+│   │   ├── RecipeForm.tsx    # Recipe creation form
+│   │   ├── RecipeDetail.tsx  # Detailed recipe view
+│   │   └── RecipeFilters.tsx # Search and filter components
 │   └── ui/                   # shadcn/ui components
 ├── contexts/
 │   └── AuthContext.tsx       # Authentication context
 ├── lib/
-│   └── firebase.ts           # Firebase configuration
+│   ├── firebase.ts           # Firebase configuration
+│   └── utils.ts              # Utility functions
 ├── pages/
 │   ├── AuthPage.tsx          # Login/Register page
-│   └── Dashboard.tsx         # Main dashboard
+│   ├── RecipesPage.tsx       # Main recipes page
+│   └── ProfilePage.tsx       # User profile page
 ├── services/
-│   └── firestore.ts          # Database operations
+│   └── recipeService.ts      # Recipe database operations
 ├── types/
-│   └── index.ts              # TypeScript interfaces
+│   ├── index.ts              # General TypeScript interfaces
+│   └── recipe.ts             # Recipe-specific types
 └── App.tsx                   # Main app component
 ```
 
@@ -66,7 +79,8 @@ npm install
 1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/)
 2. Enable Authentication (Email/Password)
 3. Create a Firestore database
-4. Get your Firebase config and update `src/lib/firebase.ts`
+4. Enable Firebase Storage
+5. Get your Firebase config and update `src/lib/firebase.ts`
 
 ### 3. Start Development Server
 ```bash
@@ -76,19 +90,20 @@ npm run dev
 ### 4. Access the Application
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-## 📖 Detailed Setup Guide
-
-For comprehensive setup instructions, see [SKYCLOUD_SETUP.md](./SKYCLOUD_SETUP.md)
-
 ## 🎯 Usage
 
+### For Users
 1. **Register/Login**: Create an account or sign in
-2. **Add Records**: Click "Add Record" to create new data entries
-3. **View Records**: Browse all your records in card format
-4. **Edit Records**: Click the edit icon to modify existing records
-5. **Delete Records**: Click the delete icon to remove records
-6. **Search**: Use the search bar to find specific records
-7. **Filter**: Filter by status (Active/Pending/Completed) or priority
+2. **Browse Recipes**: Explore recipes from other users
+3. **Search & Filter**: Find recipes by cuisine, ingredients, difficulty, etc.
+4. **Like & Comment**: Interact with recipes you love
+5. **Share Recipes**: Share recipes via social media or copy links
+
+### For Recipe Creators
+1. **Create Recipes**: Add detailed recipes with images, ingredients, and steps
+2. **Manage Recipes**: Edit or delete your own recipes
+3. **Track Performance**: See likes and comments on your recipes
+4. **Profile Management**: View your recipe portfolio
 
 ## 🛠️ Development Commands
 
@@ -102,20 +117,47 @@ npm run lint         # Run ESLint
 ## 🚀 Deployment
 
 The application can be deployed to:
-- **Vercel** (recommended)
+- **Vercel** (recommended for frontend)
 - **Firebase Hosting**
 - **Netlify**
 - Any static hosting service
 
-See the detailed setup guide for deployment instructions.
+Make sure to configure environment variables for Firebase in your deployment platform.
 
 ## 🔒 Security Features
 
 - User authentication with Firebase Auth
-- Row-level security (users can only access their own data)
-- Client-side form validation
+- Row-level security (users can only edit their own recipes)
+- Image upload validation and security rules
+- Client-side form validation with Zod
 - Secure API communication
 - HTTPS by default in production
+
+## 🍳 Recipe Features
+
+### Recipe Information
+- Title, description, and high-quality images
+- Cuisine type and difficulty level
+- Cooking time and serving size
+- Detailed ingredient lists
+- Step-by-step instructions
+- Nutrition information (calories, protein, fat, carbs)
+- Tags for categorization
+
+### Social Features
+- Like/unlike recipes
+- Comment on recipes
+- Share recipes via Web Share API or clipboard
+- User profiles with recipe statistics
+- Recipe discovery and recommendations
+
+### Search & Filter
+- Text search across titles, descriptions, and ingredients
+- Filter by cuisine type
+- Filter by difficulty level
+- Calorie range filtering
+- Tag-based filtering
+- Sort by newest, most liked, or lowest calories
 
 ## 🤝 Contributing
 
@@ -132,10 +174,10 @@ This project is open source and available under the [MIT License](LICENSE).
 ## 📞 Support
 
 For issues and questions:
-- Check the troubleshooting section in [SKYCLOUD_SETUP.md](./SKYCLOUD_SETUP.md)
 - Open an issue on GitHub
 - Review Firebase documentation
+- Check React and TypeScript documentation
 
 ---
 
-**SkyCloud** - Your data management platform in the cloud ☁️
+**FlavorHub** - Where food lovers share their passion 🍽️
